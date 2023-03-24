@@ -1,0 +1,274 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<hdevelop file_version="1.2" halcon_version="22.11.0.0">
+<procedure name="main">
+<interface/>
+<body>
+<c>* Web 3D defects inspection</c>
+<c>* March 12, 2023</c>
+<c></c>
+<c>* binocular_disparity</c>
+<c>* The program generates an artificial epipolar stereo image pair of constant, good texture. </c>
+<c>* The disparities can be calculated</c>
+<c>* The defects can be segmented from the disparity image.</c>
+<c></c>
+<c>* 1. Calibration</c>
+<c>* 2. Disparity depth map</c>
+<c>* 3. Flag ROI</c>
+<c>* 4. Web ROI</c>
+<c>* -------------------------------------------------</c>
+<c></c>
+<l>dev_update_window ('off')</l>
+<l>Width := 640</l>
+<l>Height := 480</l>
+<l>dev_close_window ()</l>
+<l>dev_open_window (0, 0, Width, Height, 'gray', WindowHandle1)</l>
+<l>dev_set_draw ('margin')</l>
+<l>dev_set_color ('green')</l>
+<l>dev_set_line_width (3)</l>
+<l>set_display_font (WindowHandle1, 14, 'mono', 'true', 'false')</l>
+<l>dev_open_window (0, Width + 12, Width, Height, 'gray', WindowHandle2)</l>
+<l>set_display_font (WindowHandle2, 14, 'mono', 'true', 'false')</l>
+<c>* </c>
+<c></c>
+<l>* acqMode := 'live'</l>
+<l>acqMode := 'not_live'</l>
+<c></c>
+<l>if (acqMode='live')</l>
+<l>    info_framegrabber ('GigEVision2', 'info_boards', Information, ValueList)</l>
+<c>    </c>
+<c>    * Image Acquisition 01</c>
+<l>    open_framegrabber ('GigEVision2', 0, 0, 0, 0, 0, 0, 'progressive', -1, 'default', -1, 'false', 'default', '0030533801b1_COGNEX_CIC4KL24G', 0, -1, AcqHandle1)</l>
+<l>    set_framegrabber_param (AcqHandle1, 'Height', 1024)</l>
+<l>    set_framegrabber_param (AcqHandle1, 'BinningHorizontal', 2)</l>
+<c>    </c>
+<l>    set_framegrabber_param (AcqHandle1, 'AcquisitionMode', 'Continuous')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'TriggerSelector', 'LineStart')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'TriggerMode', 'On')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'TriggerSource', 'ShaftEncoderModuleOut')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'ShaftEncoderModuleLineSelector', 'PhaseB')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'ShaftEncoderModuleLineSource', 'Line2')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'ShaftEncoderModuleCounterMode', 'FollowDirection')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'UserSetSelector', 'UserSet1')</l>
+<l>    set_framegrabber_param (AcqHandle1, 'UserSetDefaultSelector', 'UserSet1')</l>
+<l>    get_framegrabber_param (AcqHandle1, 'available_callback_types', Value)</l>
+<l>    set_framegrabber_param (AcqHandle1, 'grab_timeout', -1)</l>
+<l>    grab_image_start (AcqHandle1, -1)</l>
+<c>    </c>
+<c>    * Image Acquisition 02</c>
+<l>    open_framegrabber ('GigEVision2', 0, 0, 0, 0, 0, 0, 'progressive', -1, 'default', -1, 'false', 'default', '0030533801b8_COGNEX_CIC4KL24G', 0, -1, AcqHandle2)    </l>
+<l>    set_framegrabber_param (AcqHandle2, 'Height', 1024)</l>
+<l>    set_framegrabber_param (AcqHandle2, 'BinningHorizontal', 2)</l>
+<l>    set_framegrabber_param (AcqHandle2, 'AcquisitionMode', 'Continuous')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'TriggerSelector', 'LineStart')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'TriggerMode', 'On')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'TriggerSource', 'ShaftEncoderModuleOut')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'ShaftEncoderModuleLineSelector', 'PhaseB')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'ShaftEncoderModuleLineSource', 'Line2')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'ShaftEncoderModuleCounterMode', 'FollowDirection')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'UserSetSelector', 'UserSet1')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'UserSetDefaultSelector', 'UserSet1')</l>
+<l>    set_framegrabber_param (AcqHandle2, 'grab_timeout', -1)</l>
+<l>    grab_image_start (AcqHandle2, -1)</l>
+<c>        </c>
+<l>else</l>
+<c>    * image directory</c>
+<l>    dirPath1 := 'images/camera1'    </l>
+<l>    list_files (dirPath1, ['files','recursive','follow_links'], ImageFiles1)</l>
+<l>    tuple_regexp_select (ImageFiles1, ['\\.(tif|tiff|gif|bmp|jpg|jpeg|jp2|png|pcx|pgm|ppm|pbm|xwd|ima|hobj)$','ignore_case'], ImageFiles1)</l>
+<c>     </c>
+<l>    dirPath2 := 'images/camera2'    </l>
+<l>    list_files (dirPath2, ['files','recursive','follow_links'], ImageFiles2)</l>
+<l>    tuple_regexp_select (ImageFiles2, ['\\.(tif|tiff|gif|bmp|jpg|jpeg|jp2|png|pcx|pgm|ppm|pbm|xwd|ima|hobj)$','ignore_case'], ImageFiles2)</l>
+<l>endif</l>
+<c></c>
+<c></c>
+<c>****** LOAD CALIBRATION</c>
+<l>read_cam_par ('camParam_ls.dat', camParamRect1)</l>
+<l>read_cam_par ('camParam_ls.dat', camParamRect2)</l>
+<l>read_pose ('pos_right2left_ls.dat', relPoseRect)</l>
+<c></c>
+<c></c>
+<l>Counter := 0</l>
+<c></c>
+<l>while (1)</l>
+<c>    </c>
+<c>    </c>
+<l>    if (acqMode='live')</l>
+<l>        grab_image_async (ImageRaw1, AcqHandle1, -1)</l>
+<l>        grab_image_async (ImageRaw2, AcqHandle2, -1)</l>
+<l>    else  </l>
+<l>        read_image (Image1, ImageFiles1[Counter])  </l>
+<l>        read_image (Image2, ImageFiles2[Counter])</l>
+<l>    endif</l>
+<l>    Counter := Counter+1</l>
+<c>    </c>
+<l>    dev_set_window (WindowHandle1)</l>
+<l>    dev_display (Image1)</l>
+<l>    disp_message (WindowHandle1, 'Left image', 'window', 12, 12, 'black', 'true')</l>
+<l>    dev_set_window (WindowHandle2)</l>
+<l>    dev_display (Image2)</l>
+<l>    disp_message (WindowHandle2, 'Right image', 'window', 12, 12, 'black', 'true')</l>
+<l>    disp_continue_message (WindowHandle1, 'black', 'true')</l>
+<l>*     stop ()</l>
+<c>    </c>
+<c>    * Method: </c>
+<c>    * sad-summed absolute difference</c>
+<c>    * ssd-summed squared difference</c>
+<c>    * ncc-normalized cross corrallation </c>
+<c>    * mask width/height: big enough to cover the disparity range, small to be more accurate</c>
+<l>    method       := 'sad'</l>
+<c>    * 11, 9, 3</c>
+<l>    maskWidth    := 3</l>
+<l>    maskHeight   := 3</l>
+<l>    textureThreshold := 0</l>
+<l>    minDisparity := -30</l>
+<l>    maxDisparity := 30</l>
+<l>    numberLevel  := 2</l>
+<l>    scoreThresh  := 30</l>
+<l>    filter       := 'left_right_check'</l>
+<l>    subDisparity := 'interpolation'</l>
+<l>    binocular_disparity (Image1, Image2, Disparity1, Score1, method, maskWidth, maskHeight,\
+                         textureThreshold, minDisparity, maxDisparity, numberLevel, scoreThresh,\
+                         filter, subDisparity)</l>
+<c></c>
+<c>    * Save disparity image</c>
+<l>    saveDisparity := 0</l>
+<l>    if (saveDisparity)</l>
+<l>        write_image (Disparity1, 'tiff', 0, 'result/Disparity')</l>
+<l>    endif</l>
+<c>    </c>
+<c>    </c>
+<c>    * Convert disparity to coordinates</c>
+<c>    * camParamRect1 - internal camera parameters of camera 1</c>
+<c>    * camParamRect2 - internal camera parameters of camera 2</c>
+<c>    * relPoseRect - external parameters</c>
+<l>     disparity_image_to_xyz (Disparity1, X, Y, Z, camParamRect1, camParamRect2, relPoseRect)</l>
+<c>    </c>
+<c>    * Convert coordinates to 3D objects</c>
+<l>     xyz_to_object_model_3d (X, Y, Z, ObjectModel3DTemp)</l>
+<c>    </c>
+<c>    * Apply pose transform to the proper position</c>
+<l>     rigid_trans_object_model_3d (ObjectModel3DTemp, relPoseRect, ObjectModel3D)</l>
+<c>    </c>
+<c>    * Get 3D points from 3dModelObject</c>
+<l>     get_object_model_3d_params (ObjectModel3D, 'num_points', ParamValueNumPoints)</l>
+<c>    </c>
+<c>    </c>
+<c>    * Generate web plane</c>
+<l>     rigid_trans_object_model_3d (ObjectModel3D, relPoseRect, ObjectModel3DRigidTrans)</l>
+<c></c>
+<c>    * union</c>
+<l>    union_object_model_3d (ObjectModel3DRigidTrans, 'points_surface', UnionObjectModel3D)</l>
+<c></c>
+<c>    * do plane fitting to find bottle base plane</c>
+<l>    fit_primitives_object_model_3d (UnionObjectModel3D, ParamValueNumPoints, ParamValueNumPoints, ObjectModel3DOut)</l>
+<c></c>
+<c>    * get plane parameter</c>
+<l>    get_object_model_3d_params (ObjectModel3DOut, 'primitive_parameter', GenParamValue)</l>
+<c></c>
+<c>    * gen 3D plane</c>
+<l>    gen_plane_object_model_3d (relPoseRect, GenParamValue, GenParamValue, ObjectModel3D1)</l>
+<c>  </c>
+<c>    </c>
+<c>    * Scale disparity image</c>
+<l>    min_max_gray (Disparity1, Disparity1, 0, Min, Max, Range)</l>
+<l>    scale_image (Disparity1, Disparity1, Max * 255 / (Max - Min), Min)</l>
+<l>    convert_image_type (Disparity1, ByteDisparity, 'byte')</l>
+<c>    </c>
+<c>    * segmentation based on disparity</c>
+<l>    segMethod := 2</l>
+<l>    if (segMethod = 1)</l>
+<l>        binary_threshold (ByteDisparity, regionDefect, 'max_separability', 'dark', UsedThreshold)</l>
+<l>    else</l>
+<l>        mean_image (ByteDisparity, ImageMean, 9, 9)</l>
+<l>        dyn_threshold (ByteDisparity, ImageMean, regionDefect, 1, 'dark')</l>
+<l>    endif</l>
+<c></c>
+<c>    * Display    </c>
+<l>    dev_open_window (Height + 62, 0, Width, Height, 'gray', WindowHandle3)</l>
+<l>    set_display_font (WindowHandle3, 14, 'mono', 'true', 'false')</l>
+<l>    dev_set_window (WindowHandle3)</l>
+<l>    dev_display (Disparity1)</l>
+<l>    disp_message (WindowHandle3, 'Disparity image', 'window', 12, 12, 'black', 'true')</l>
+<c>    </c>
+<c>    * </c>
+<l>    dev_set_window (WindowHandle1)</l>
+<l>    dev_display (Image1)</l>
+<l>    dev_set_draw ('margin')</l>
+<l>    dev_set_color ('red')</l>
+<l>    dev_display (regionDefect)</l>
+<l>    disp_message (WindowHandle1, 'Left image', 'window', 12, 12, 'black', 'true')</l>
+<c>    </c>
+<l>    stop ()</l>
+<c>    </c>
+<l>endwhile</l>
+<c></c>
+</body>
+<docu id="main">
+<parameters/>
+</docu>
+</procedure>
+<procedure name="gen_binocular_image_pair">
+<interface>
+<oo>
+<par name="Image1" base_type="iconic" dimension="0"/>
+<par name="Image2" base_type="iconic" dimension="0"/>
+</oo>
+<ic>
+<par name="ObjectDisparity" base_type="ctrl" dimension="0"/>
+<par name="BackgroundDisparity" base_type="ctrl" dimension="0"/>
+<par name="Width" base_type="ctrl" dimension="0"/>
+<par name="Height" base_type="ctrl" dimension="0"/>
+</ic>
+</interface>
+<body>
+<c>* generate a background image</c>
+<l>gen_image_const (BackgroundImage, 'byte', Width, Height)</l>
+<l>gen_image_proto (BackgroundImage, BackgroundImage, 128)</l>
+<l>add_noise_white (BackgroundImage, BackgroundImage, 400)</l>
+<c>*add a contamination to the background image</c>
+<l>gen_region_line (RegionLines, 100, 50, 50, 150)</l>
+<l>dilation_circle (RegionLines, RegionDilation, 5.5)</l>
+<l>paint_region (RegionDilation, BackgroundImage, BackgroundImage, 0, 'fill')</l>
+<c></c>
+<c>* generate an image of a circle</c>
+<l>gen_image_const (CircleImage, 'byte', Width, Height)</l>
+<l>gen_image_proto (CircleImage, CircleImage, 0)</l>
+<l>add_noise_white (CircleImage, CircleImage, 70)</l>
+<l>* gen_circle (Circle, Height / 2, Width / 2, 50.5)</l>
+<l>* reduce_domain (CircleImage, Circle, CircleImage)</l>
+<c>* paint the background and the circle into image 1</c>
+<l>* paint_gray (CircleImage, BackgroundImage, Image1)</l>
+<c></c>
+<l>gen_region_line (RegionLines2, 150, 50, 100, 150)</l>
+<l>dilation_circle (RegionLines2, Circle, 5.5)</l>
+<l>reduce_domain (CircleImage, Circle, CircleImage)</l>
+<l>* paint_region (CircleImage, BackgroundImage, Image1, 0, 'fill')</l>
+<l>paint_gray (CircleImage, BackgroundImage, Image1)</l>
+<l>write_image (Image1, 'tiff', 0, 'Image1')</l>
+<c>* </c>
+<c>* translate the background and the circle object and paint them into image 2</c>
+<l>hom_mat2d_identity (HomMat2DIdentity)</l>
+<l>hom_mat2d_translate (HomMat2DIdentity, 0, BackgroundDisparity, HomMat2DBackground)</l>
+<l>affine_trans_image (BackgroundImage, Image2, HomMat2DBackground, 'constant', 'false')</l>
+<l>hom_mat2d_translate (HomMat2DIdentity, 0, ObjectDisparity, HomMat2DCircle)</l>
+<l>affine_trans_image (CircleImage, CircleImage2, HomMat2DCircle, 'constant', 'false')</l>
+<l>affine_trans_region (Circle, Circle2, HomMat2DCircle, 'constant')</l>
+<l>reduce_domain (CircleImage2, Circle2, CircleImage2)</l>
+<l>paint_gray (CircleImage2, Image2, Image2)</l>
+<l>write_image (Image2, 'tiff', 0, 'Image2')</l>
+<l>return ()</l>
+</body>
+<docu id="gen_binocular_image_pair">
+<short lang="en_US">generates an artificial epipolar image pair.</short>
+<parameters>
+<parameter id="BackgroundDisparity"/>
+<parameter id="Height"/>
+<parameter id="Image1"/>
+<parameter id="Image2"/>
+<parameter id="ObjectDisparity"/>
+<parameter id="Width"/>
+</parameters>
+</docu>
+</procedure>
+</hdevelop>
